@@ -351,7 +351,7 @@ export default function HomeScreen() {
         <View style={{ marginTop: 20, marginBottom: 20 }}>
           <View>
             {suggestedMeals.map((item, i) => (
-              <View style={styles.card}>
+              <View style={styles.card} key={i}>
                 {/* Image with a better aspect ratio */}
                 {item.image_url ? (
                   <Image
