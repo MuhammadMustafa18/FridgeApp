@@ -1,11 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View } from "react-native";
+import { Image, View } from "react-native";
 
 import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
@@ -14,17 +12,25 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        tabBarActiveTintColor: "#000",
+        tabBarInactiveTintColor: "#CCC",
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: {
+          paddingTop: 10,
+          backgroundColor: "white",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons size={22} name={focused ? "home" : "home-outline"} color={color} />
           ),
         }}
       />
@@ -36,16 +42,20 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => (
             <View
               style={{
-                width: 64,
-                height: 64,
+                width: 55,
+                height: 55,
                 borderRadius: 32,
-                backgroundColor: "#4CAF50",
+                backgroundColor: "#47de4cff",
                 justifyContent: "center",
                 alignItems: "center",
-                marginBottom: 25, // lifts it up
+                marginBottom: -10, // lifts it up
               }}
             >
-              <Ionicons name="scan-outline" size={28} color="white" />
+              <Image
+                source={require('../../assets/images/iconmiddle.png')}
+                style={{ width: 33, height: 33, tintColor: 'white' }}
+                resizeMode="contain"
+              />
             </View>
           ),
         }}
@@ -53,9 +63,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: "Explore",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="paperplane.fill" color={color} />
+          title: "Inventory",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons size={22} name={focused ? "cube" : "cube-outline"} color={color} />
           ),
         }}
       />

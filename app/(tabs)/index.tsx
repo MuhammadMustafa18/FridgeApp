@@ -4,8 +4,7 @@ import {
   confirmAllItems,
   deleteItem,
   getItems,
-  saveRecipe,
-  updateItemStatus,
+  saveRecipe
 } from "@/services/db";
 import { Item, RecipeTemp } from "@/types";
 
@@ -17,11 +16,11 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -29,13 +28,11 @@ import {
 } from "react-native";
 import "../../global.css";
 
-
-
 export default function HomeScreen() {
   const { previewImage, setPreviewImage } = useImagePreview();
   const [items, setItems] = useState<Item[]>([]);
   const [wholeInventory, setWholeInventory] = useState<Item[]>([]);
-    const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState("1");
   const [adding, setAdding] = useState(false);
@@ -48,25 +45,23 @@ export default function HomeScreen() {
       loadConfirmedInventory();
     }, [])
   );
+
   useEffect(() => {
     const sourceItems = isOn ? wholeInventory : items;
     if (sourceItems.length === 0) {
-      setSuggestedMeals([]); // Clear suggestions if source is empty
+      setSuggestedMeals([]);
       return;
     }
 
     const run = async () => {
-      
       const ingredientNames = sourceItems.map((i) =>
         i.name.trim().toLowerCase()
       );
       const recipes = await suggestRecipesFromGroq(ingredientNames);
-      console.log("recipes");
-      console.log(recipes);
-      setSuggestedMeals(recipes);
+      console.log("recipes", recipes);
+      // setSuggestedMeals(recipes); // Wait for images
       const recipesWithImages = await attachImages(recipes);
       setSuggestedMeals(recipesWithImages);
-      console.log(recipesWithImages);
     };
 
     run();
@@ -79,15 +74,6 @@ export default function HomeScreen() {
   const loadConfirmedInventory = async () => {
     const data = await getItems("confirmed");
     setWholeInventory(data);
-  };
-
-  const handleConfirmItem = async (id: number) => {
-    try {
-      await updateItemStatus(id, "confirmed");
-      await loadItems();
-    } catch (e) {
-      Alert.alert("Error", "Failed to confirm item");
-    }
   };
 
   const handleConfirmAll = async () => {
@@ -103,16 +89,11 @@ export default function HomeScreen() {
   const handleDeleteItem = async (id: number) => {
     try {
       await deleteItem(id);
-      await loadItems(); // Refresh to show item is gone
+      await loadItems();
     } catch (e) {
       Alert.alert("Error", "Failed to delete item");
     }
   };
-
-  // ... (Manual Add State logic remains same, ensure handleAddItem calls loadItems at end)
-
-  // Manual Add State
-
 
   const handleAddItem = async () => {
     if (!newItemName.trim()) {
@@ -122,21 +103,12 @@ export default function HomeScreen() {
 
     try {
       setAdding(true);
-      // 1. Get Image
       const image_url = await searchItemImage(newItemName);
-
-      // 2. Add to DB
       const qty = parseInt(newItemQuantity) || 1;
       await addItem(newItemName, qty, image_url);
-
-      // 3. Cleanup
       setNewItemName("");
       setNewItemQuantity("1");
       setModalVisible(false);
-
-      // 5. append to local manually
-
-      // 4. Refresh List
       await loadItems();
     } catch (error) {
       console.error(error);
@@ -147,8 +119,6 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    console.log("Items changed, detected by recipe");
-    console.log(items);
     if (items.length > 0) {
       (async () => {
         const recipesWithImages = await suggestRandomRecipe(items);
@@ -156,6 +126,7 @@ export default function HomeScreen() {
       })();
     }
   }, [items]);
+
   const attachImages = async (recipes: RecipeTemp[]): Promise<RecipeTemp[]> => {
     if (recipes.length == 0) return [];
     const recipesWithImages = await Promise.all(
@@ -169,7 +140,6 @@ export default function HomeScreen() {
 
   const suggestRandomRecipe = async (items: Item[]): Promise<RecipeTemp[]> => {
     const availableNames = items.map((i) => i.name.toLowerCase());
-    // Example simple recipe pool
     const recipes = [
       { name: "Omelette", ingredients: ["eggs", "milk", "cheese"] },
       { name: "Tomato Soup", ingredients: ["tomato", "water", "salt"] },
@@ -179,7 +149,6 @@ export default function HomeScreen() {
       { name: "Pie", ingredients: ["blueberries"] },
     ];
 
-    // Filter recipes that have at least one ingredient from available items
     const possibleRecipes = recipes.filter((recipe) =>
       recipe.ingredients.some((ing) => availableNames.includes(ing))
     );
@@ -195,217 +164,147 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView style={styles.container}>
-        {/* Header */}
-        <Text style={styles.appTitle}>FridgeScan 🧊</Text>
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Transparent Spacer to show black bg */}
+        <View style={{ height: 140 }} />
 
-        {/* Recent Scan Preview */}
-        {previewImage && (
-          <View style={styles.cardPrimary}>
-            <Text style={styles.cardTitle}>Recent Scan</Text>
-            <Image
-              source={{ uri: previewImage }}
-              style={{
-                width: "100%",
-                height: 200,
-                borderRadius: 10,
-                marginTop: 10,
-                resizeMode: "contain",
-                backgroundColor: "rgba(0,0,0,0.2)",
-              }}
-            />
-            <TouchableOpacity
-              onPress={() => setPreviewImage(null)}
-              style={{
-                marginTop: 10,
-                backgroundColor: "rgba(255,255,255,0.2)",
-                padding: 10,
-                borderRadius: 8,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: "white", fontWeight: "bold" }}>
-                Clear Preview
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Scan Section */}
-        <View style={styles.cardPrimary}>
-          <Text style={styles.cardTitle}>Scan</Text>
-          <Text style={styles.cardSubtitle}>
-            Take a photo of your fridge or food
+        <View style={styles.sheetContainer}>
+          {/* Header */}
+          <Text style={styles.appTitle}>
+            Recently <Text style={{ fontWeight: "900" }}>Scanned</Text>
           </Text>
-        </View>
 
-        {/* Items Section */}
-        <View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <Text style={styles.sectionTitle}>
-              Staging Area ({items.length})
-            </Text>
-            {items.length > 0 && (
-              <TouchableOpacity
-                onPress={handleConfirmAll}
-                style={{
-                  backgroundColor: "#2196F3",
-                  paddingHorizontal: 15,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                }}
-              >
-                <Text style={{ color: "white", fontWeight: "bold" }}>
-                  Add All
-                </Text>
+          {previewImage && (
+            <View style={{ marginBottom: 20 }}>
+              <Image source={{ uri: previewImage }} style={{ width: '100%', height: 200, borderRadius: 12 }} />
+              <TouchableOpacity onPress={() => setPreviewImage(null)} style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 5, borderRadius: 20 }}>
+                <Ionicons name="close" size={20} color="white" />
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          )}
 
+          {/* Items Grid */}
           <View style={styles.itemsGrid}>
             {items.map((item) => (
-              <View key={item.id} style={styles.itemCard}>
-                <Image
-                  source={{
-                    uri: item.image_url || "https://via.placeholder.com/150",
-                  }}
-                  style={styles.itemImage}
-                />
+              <View key={item.id} style={styles.itemWrapper}>
+                {/* Square Image Box */}
+                <View style={styles.imageBox}>
+                  {/* Delete Badge */}
+                  <TouchableOpacity
+                    onPress={() => handleDeleteItem(item.id)}
+                    style={styles.deleteBadge}
+                  >
+                    <Ionicons name="trash-outline" size={12} color="white" />
+                  </TouchableOpacity>
+
+                  <Image
+                    source={{
+                      uri: item.image_url || "https://via.placeholder.com/150",
+                    }}
+                    style={styles.itemImage}
+                  />
+
+                  {/* Edit Button inside Box */}
+                  <TouchableOpacity style={styles.editOverlay}>
+                    <Ionicons name="pencil" size={12} color="#333" />
+                    <Text style={styles.editText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Info Outside Box */}
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-
-                  <View
-                    style={{ flexDirection: "row", marginTop: 10, gap: 10 }}
-                  >
-                    <TouchableOpacity
-                      onPress={() => handleConfirmItem(item.id)}
-                      style={{
-                        flex: 1,
-                        backgroundColor: "#E8F5E9",
-                        padding: 8,
-                        borderRadius: 5,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Ionicons name="checkmark" size={20} color="green" />
-                    </TouchableOpacity>
-                    {/* Placeholder for delete/edit */}
-                    <TouchableOpacity
-                      onPress={() => handleDeleteItem(item.id)}
-                      style={{
-                        flex: 1,
-                        backgroundColor: "#FFEBEE",
-                        padding: 8,
-                        borderRadius: 5,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="red" />
-                    </TouchableOpacity>
+                  <View style={styles.qtyContainer}>
+                    <Ionicons name="cube-outline" size={12} color="#999" />
+                    <Text style={styles.itemQuantity}>{item.quantity}</Text>
                   </View>
                 </View>
               </View>
             ))}
-            {items.length === 0 && (
-              <Text style={styles.emptyText}>
-                No new items in staging. Scan to add!
-              </Text>
-            )}
-          </View>
-        </View>
 
-        {/* Recipes Section */}
-        <View style={[styles.headercard, { marginTop: 20 }]}>
-          <View style={styles.headerRow}>
-            <Text style={styles.sectionTitle}>Recipes</Text>
-            <View style={styles.toggleContainer}>
-              <Text style={styles.toggleLabel}>
-                {isOn ? "Whole Pantry" : "New Items Only"}
-              </Text>
-              <Switch
-                value={isOn}
-                onValueChange={setIsOn}
-                trackColor={{ true: "#2196F3", false: "#ccc" }} // Blue is usually better for "On" than Red
-                thumbColor="#fff"
-              />
+            {/* Manual Input Card - Always shows at the end */}
+            {/* Manual Input Card */}
+            <View style={styles.itemWrapper}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(true)}
+                style={[styles.imageBox, styles.manualCard]}
+              >
+                <Ionicons name="pencil-outline" size={32} color="#333" />
+                <Text style={styles.manualText}>Manual Input</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.cardSubtitle}>
-            {isOn
-              ? "AI is using your entire inventory to find meals."
-              : "AI is only looking at the items you just added."}
-          </Text>
-        </View>
-        <View style={{ marginTop: 20, marginBottom: 20 }}>
-          <View>
-            {suggestedMeals.map((item, i) => (
-              <View style={styles.card} key={i}>
-                {/* Image with a better aspect ratio */}
-                {item.image_url ? (
-                  <Image
-                    source={{ uri: item.image_url }}
-                    style={styles.image}
-                  />
-                ) : (
-                  <View style={[styles.image, styles.placeholder]}>
-                    <Ionicons name="fast-food-outline" size={32} color="#ccc" />
-                  </View>
-                )}
+          {/* Main Action Button */}
+          {items.length > 0 && (
+            <TouchableOpacity
+              onPress={handleConfirmAll}
+              style={styles.mainActionButton}
+            >
+              <Text style={styles.mainActionText}>Add items to Inventory</Text>
+            </TouchableOpacity>
+          )}
 
-                <View style={styles.content}>
-                  <View style={styles.header}>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    {/* Heart icon for saving is more intuitive than a bulky button */}
-                    <TouchableOpacity
-                      onPress={() => saveRecipe(item)}
-                      style={styles.saveIcon}
-                    >
-                      <Ionicons
-                        name="bookmark-outline"
-                        size={22}
-                        color="#ff6347"
-                      />
+          {/* Recipes Section */}
+          <View style={{ marginTop: 30 }}>
+            <View style={styles.headerRow}>
+              <Text style={styles.sectionHeader}>
+                Recipes Of <Text style={{ fontWeight: "900" }}>Recently</Text>
+              </Text>
+            </View>
+            <View style={styles.headerRow}>
+              <Text style={styles.sectionHeader}>
+                <Text style={{ fontWeight: "900" }}>Scanned</Text> Items
+              </Text>
+            </View>
+          </View>
+
+          {/* Recipes List */}
+          <View style={{ marginTop: 15, marginBottom: 80 }}>
+            {suggestedMeals.map((item, i) => (
+              <View style={styles.recipeCard} key={i}>
+                <View style={styles.recipeImagePlaceholder}>
+                  {item.image_url ? (
+                    <Image
+                      source={{ uri: item.image_url }}
+                      style={styles.recipeImage}
+                    />
+                  ) : (
+                    <View style={{ flex: 1, backgroundColor: "white" }} />
+                  )}
+                </View>
+
+                <View style={styles.recipeContent}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Text style={styles.recipeTitle}>{item.name}</Text>
+                    <TouchableOpacity onPress={() => saveRecipe(item)}>
+                      <Ionicons name="bookmark-outline" size={24} color="#1A1A1A" />
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.label}>INGREDIENTS</Text>
-                  <Text style={styles.ingredients} numberOfLines={2}>
-                    {item.ingredients.join(" • ")}
+                  <Text style={styles.recipeIngredients}>
+                    Ingredients: {item.ingredients.join(", ")}
                   </Text>
-
-                  <View style={styles.footer}>
-                    <Text style={styles.matchText}>
-                      ✨ Matches your inventory
-                    </Text>
-                  </View>
                 </View>
               </View>
             ))}
+
+            {/* View More Button */}
+            {suggestedMeals.length > 0 && (
+              <TouchableOpacity style={styles.viewMoreButton}>
+                <Text style={styles.viewMoreText}>View More</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => setModalVisible(true)}
-      >
-        <Ionicons name="add" size={30} color="white" />
-      </TouchableOpacity>
 
       {/* Manual Add Modal */}
       <Modal
@@ -463,194 +362,211 @@ export default function HomeScreen() {
   );
 }
 
+const { width, height } = Dimensions.get("window");
+const CARD_GAP = 12;
+const CARD_WIDTH = (width - 40 - CARD_GAP * 2) / 3;
+
 const styles = StyleSheet.create({
+  // Legacy container valid for reference, but using sheetContainer now
   container: {
-    flex: 1,
-    backgroundColor: "#FAFAFA",
     padding: 20,
   },
-  card: {
-    flexDirection: "row",
-    marginBottom: 16,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    overflow: "hidden", // Clips image to border radius
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    // Clean shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  image: {
-    width: 110,
-    height: 110, // Square images usually look better in rows
-  },
-  placeholder: {
-    backgroundColor: "#F9F9F9",
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
+  sheetContainer: {
     flex: 1,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    flex: 1,
-    marginRight: 8,
-  },
-  saveIcon: {
-    marginTop: -2,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#A0A0A0",
-    letterSpacing: 0.5,
-    marginTop: 4,
-  },
-  ingredients: {
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  footer: {
-    marginTop: 8,
-  },
-  matchText: {
-    fontSize: 11,
-    color: "#4CAF50",
-    fontWeight: "600",
+    backgroundColor: "#F2F2F2",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 20,
+    paddingTop: 30,
+    paddingBottom: 80,
+    minHeight: height - 100, // Ensure it fills screen
+    overflow: 'hidden',
   },
   appTitle: {
     fontSize: 28,
     fontWeight: "600",
-    color: "#111",
-    marginBottom: 24,
-    marginTop: 20,
-  },
-  toggleLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    textTransform: "uppercase",
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  toggleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0F7FF", // Light blue background to make it stand out
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 10,
-  },
-  cardPrimary: {
-    backgroundColor: "#4CAF50",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
-  },
-  headercard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: "#444", // Darker for better readibility on white/green
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 12,
+    color: "#000",
+    marginBottom: 20,
   },
   itemsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: CARD_GAP,
   },
-  itemCard: {
-    width: "48%", // Roughly 2 columns
+  itemWrapper: {
+    width: CARD_WIDTH,
+    marginBottom: 8,
+  },
+  imageBox: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH, // Square
     backgroundColor: "white",
     borderRadius: 16,
-    overflow: "hidden",
-    elevation: 2, // Android shadow
-    shadowColor: "#000", // iOS shadow
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+    // Soft shadow for the box
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
-    marginBottom: 4,
+    elevation: 2,
+    position: 'relative',
+    overflow: 'hidden', // Contain image
+  },
+  itemCard: {
+    // Legacy mapping support if needed, but we mostly use wrapper/imageBox now
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.3,
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  manualCard: {
+    // Just ensuring the manual card looks like an image box
+    borderWidth: 0,
+  },
+  deleteBadge: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    backgroundColor: "#FF5252",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  imageContainer: {
+    width: "80%",
+    height: "50%",
+    marginBottom: 5,
+    marginTop: 10,
   },
   itemImage: {
     width: "100%",
-    height: 120,
+    height: "100%",
     resizeMode: "cover",
   },
-  itemInfo: {
-    padding: 10,
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
-  itemName: {
-    fontSize: 16,
+  editOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    paddingVertical: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  editText: {
+    fontSize: 10,
     fontWeight: "600",
     color: "#333",
-    marginBottom: 4,
+  },
+  itemInfo: {
+    width: "100%",
+    alignItems: 'flex-start', // Left align
+    paddingHorizontal: 4,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    textAlign: "left",
+    marginBottom: 2,
+  },
+  qtyContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   itemQuantity: {
+    fontSize: 12,
+    color: "#999",
+    fontWeight: '500',
+  },
+  manualText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333",
+  },
+  mainActionButton: {
+    backgroundColor: "#1a1a1a",
+    paddingVertical: 16,
+    borderRadius: 25,
+    alignItems: "center",
+    marginTop: 24,
+    width: "100%",
+  },
+  mainActionText: {
+    color: "white",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  sectionHeader: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#000",
+    lineHeight: 32,
+  },
+  headerRow: {},
+  recipeCard: {
+    marginBottom: 24,
+  },
+  recipeImagePlaceholder: {
+    width: "100%",
+    height: 150, // Large rectangular box
+    backgroundColor: "white",
+    borderRadius: 24, // Rounder corners
+    overflow: "hidden",
+    marginBottom: 12,
+    // Optional shadow for the image box itself if desired
+  },
+  recipeImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  recipeContent: {
+    paddingHorizontal: 4, // Slight indent alignment
+  },
+  recipeTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    flex: 1,
+    marginBottom: 4,
+  },
+  recipeIngredients: {
     fontSize: 14,
     color: "#666",
+    lineHeight: 20,
   },
-  emptyText: {
-    color: "#888",
-    fontStyle: "italic",
-    width: "100%",
-    textAlign: "center",
-    marginTop: 20,
-  },
-  fab: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#4CAF50",
-    justifyContent: "center",
+  viewMoreButton: {
+    backgroundColor: "#1A1A1A",
+    paddingVertical: 16,
+    borderRadius: 30, // Pill shape
     alignItems: "center",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    marginTop: 10,
+    marginBottom: 40,
+  },
+  viewMoreText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
   },
   modalOverlay: {
     flex: 1,
@@ -670,7 +586,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: "center",
   },
-  headerlabel: {
+  label: {
     fontSize: 16,
     marginBottom: 8,
     fontWeight: "500",

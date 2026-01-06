@@ -9,11 +9,31 @@ import { Item, Recipe } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+
 export default function TabTwoScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const router = useRouter();
+
+  // Edit Modal State
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editQuantity, setEditQuantity] = useState("1");
+  const [savingObj, setSavingObj] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,341 +46,438 @@ export default function TabTwoScreen() {
     const data = await getItems("confirmed");
     setItems(data);
   };
-  const handleUpdateQuantity = async (id: number, quantity: number) => {
-    try {
-      await updateItemQuantity(id, quantity);
-      await loadItems(); // what is better design? baar baar load or what?
-    } catch (e) {
-      Alert.alert("Error", "Failed to delete item");
-    }
-  }
-  const handleDeleteItem = async (id: number) => {
-      try {
-        await deleteItem(id);
-        await loadItems(); // Refresh to show item is gone
-      } catch (e) {
-        Alert.alert("Error", "Failed to delete item");
-      }
-    };
-    const handleDeleteRecipe = async (id: number) => {
-      try {
-        await deleteRecipe(id);
-        await loadRecipes(); // Refresh to show item is gone
-      } catch (e) {
-        Alert.alert("Error", "Failed to delete recipe");
-      }
-    };
 
   const loadRecipes = async () => {
     const data = await getRecipes();
     setRecipes(data);
   };
 
+  const handleDeleteItem = async (id: number) => {
+    try {
+      await deleteItem(id);
+      await loadItems();
+    } catch (e) {
+      Alert.alert("Error", "Failed to delete item");
+    }
+  };
+
+  const handleDeleteRecipe = async (id: number) => {
+    try {
+      await deleteRecipe(id);
+      await loadRecipes();
+    } catch (e) {
+      Alert.alert("Error", "Failed to delete recipe");
+    }
+  };
+
+  const openEditModal = (item: Item) => {
+    setEditingItem(item);
+    setEditName(item.name);
+    setEditQuantity(item.quantity.toString());
+    setEditModalVisible(true);
+  };
+
+  const handleSaveChanges = async () => {
+    if (!editingItem) return;
+    if (!editName.trim()) {
+      Alert.alert("Error", "Name cannot be empty");
+      return;
+    }
+    setSavingObj(true);
+    try {
+      const qty = parseInt(editQuantity) || 0;
+      await updateItemQuantity(editingItem.id, qty);
+      await loadItems();
+      setEditModalVisible(false);
+    } catch (e) {
+      Alert.alert("Error", "Failed to update item");
+    } finally {
+      setSavingObj(false);
+    }
+  };
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 40 }}
-    >
-      <Text style={styles.appTitle}>Global Properties 🌎</Text>
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Spacer for status bar area / top visual */}
+        <View style={{ height: 60, backgroundColor: "#000" }} />
 
-      {/* --- INVENTORY SECTION --- */}
-      <View style={styles.cardPrimary}>
-        <Text style={styles.cardTitle}>Inventory</Text>
-        <Text style={styles.cardSubtitle}>All your confirmed items</Text>
-      </View>
+        <View style={styles.sheetContainer}>
+          <Text style={styles.pageTitle}>Inventory</Text>
 
-      <View style={styles.itemsGrid}>
-        {items.map((item) => (
-          <View key={item.id} style={styles.itemCard}>
-            <Image
-              source={{
-                uri: item.image_url || "https://via.placeholder.com/150",
-              }}
-              style={styles.itemImage}
-            />
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-            </View>
+          {/* Grid */}
+          <View style={styles.itemsGrid}>
+            {items.map((item) => (
+              <View key={item.id} style={styles.itemWrapper}>
+                <View style={styles.imageBox}>
+                  <TouchableOpacity
+                    style={styles.deleteBadge}
+                    onPress={() => handleDeleteItem(item.id)}
+                  >
+                    <Ionicons name="trash-outline" size={12} color="white" />
+                  </TouchableOpacity>
 
-            <View style={styles.actionRow}>
-              {/* DELETE BUTTON - Kept separate for safety */}
+                  <Image
+                    source={{ uri: item.image_url || "https://via.placeholder.com/150" }}
+                    style={styles.itemImage}
+                  />
 
-              {/* QUANTITY CONTROLS GROUP */}
-              <View style={styles.stepperContainer}>
-                <TouchableOpacity
-                  onPress={() =>
-                    handleUpdateQuantity(
-                      item.id,
-                      Math.max(0, item.quantity - 1)
-                    )
-                  }
-                  style={styles.stepperButton}
-                >
-                  <Ionicons name="remove-outline" size={20} color="#555" />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.editOverlay}
+                    onPress={() => openEditModal(item)}
+                  >
+                    <Ionicons name="pencil" size={12} color="#333" />
+                    <Text style={styles.editText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
 
-                <Text style={styles.quantityText}>{item.quantity}</Text>
-
-                <TouchableOpacity
-                  onPress={() =>
-                    handleUpdateQuantity(item.id, item.quantity + 1)
-                  }
-                  style={styles.stepperButton}
-                >
-                  <Ionicons name="add-outline" size={20} color="#4CAF50" />
-                </TouchableOpacity>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                  <View style={styles.qtyContainer}>
+                    <Ionicons name="cube-outline" size={12} color="#999" />
+                    <Text style={styles.itemQty}>{item.quantity}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => handleDeleteItem(item.id)}
-              style={[styles.iconButton, styles.deleteItemButton]}
-            >
-              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-            </TouchableOpacity>
+            ))}
           </View>
-        ))}
-        {items.length === 0 && (
-          <Text style={styles.emptyText}>Inventory is empty.</Text>
-        )}
-      </View>
+          {items.length === 0 && (
+            <Text style={styles.emptyText}>No items in inventory.</Text>
+          )}
 
-      {/* --- RECIPES SECTION --- */}
-      <View style={[styles.cardPrimary, styles.cardSecondary]}>
-        <Text style={styles.cardTitle}>Suggested Recipes</Text>
-        <Text style={styles.cardSubtitle}>Based on your inventory</Text>
-      </View>
+          {/* Saved Recipes */}
+          <Text style={styles.sectionTitle}>Saved Recipes</Text>
 
-      <View style={styles.recipeList}>
-        {recipes.map((recipe, i) => (
-          <TouchableOpacity
-            key={recipe.id}
-            style={styles.recipeCard}
-            onPress={() =>
-              router.push({
-                pathname: "/recipe/[id]",
-                params: {
-                  id: i, // or recipe.id
-                  name: recipe.name,
-                  ingredients: recipe.ingredients,
-                  image_url: recipe.image_url,
-                  how_to_cook: recipe.how_to_cook,
-                },
-              })
-            }
-          >
-            {recipe.image_url && (
-              <Image
-                source={{ uri: recipe.image_url }}
-                style={styles.recipeImage}
-              />
-            )}
-            <View style={styles.recipeInfo}>
-              <View style={styles.recipeHeaderRow}>
-                <Text style={styles.recipeName} numberOfLines={1}>
-                  {recipe.name}
-                </Text>
-                {/* DELETE BUTTON */}
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation(); // Prevents the card click from firing
-                    handleDeleteRecipe(recipe.id);
-                  }}
-                  style={styles.deleteButton}
-                >
-                  <Text style={styles.deleteButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
+          <View style={styles.recipeList}>
+            {recipes.map((recipe, i) => (
+              <TouchableOpacity
+                key={recipe.id}
+                style={styles.recipeCard}
+                onPress={() => router.push({
+                  pathname: "/recipe/[id]",
+                  params: {
+                    id: i,
+                    name: recipe.name,
+                    ingredients: recipe.ingredients,
+                    image_url: recipe.image_url,
+                    how_to_cook: recipe.how_to_cook
+                  }
+                })}
+              >
+                <View style={styles.recipeImageWrapper}>
+                  {recipe.image_url ? (
+                    <Image source={{ uri: recipe.image_url }} style={styles.recipeImage} />
+                  ) : (
+                    <View style={[styles.recipeImage, { backgroundColor: '#ddd' }]} />
+                  )}
+                </View>
 
-              <Text style={styles.recipeIngredientsLabel}>Ingredients:</Text>
-              <Text style={styles.recipeIngredients}>{recipe.ingredients}</Text>
-            </View>
+                <View style={styles.recipeContent}>
+                  <View style={styles.recipeHeader}>
+                    <Text style={styles.recipeName}>{recipe.name}</Text>
+                    <TouchableOpacity onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteRecipe(recipe.id);
+                    }}>
+                      <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.recipeIngredients} numberOfLines={2}>
+                    Ingredients: {recipe.ingredients}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {recipes.length === 0 && (
+            <Text style={styles.emptyText}>No recipes saved.</Text>
+          )}
+
+          <TouchableOpacity style={styles.viewMoreButton}>
+            <Text style={styles.viewMoreText}>View More</Text>
           </TouchableOpacity>
-        ))}
-        {recipes.length === 0 && (
-          <Text style={styles.emptyText}>No recipes found.</Text>
-        )}
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+
+      {/* Edit Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Item</Text>
+
+            <Text style={styles.label}>Item Name</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: '#eee' }]}
+              value={editName}
+              editable={false}
+            />
+
+            <Text style={styles.label}>Quantity</Text>
+            <TextInput
+              style={styles.input}
+              value={editQuantity}
+              onChangeText={setEditQuantity}
+              keyboardType="numeric"
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonCancel]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.buttonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, styles.buttonSave]}
+                onPress={handleSaveChanges}
+                disabled={savingObj}
+              >
+                {savingObj ? <ActivityIndicator color="white" /> : <Text style={styles.buttonTextSave}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
+const { width, height } = Dimensions.get("window");
+const CARD_GAP = 12;
+const CARD_WIDTH = (width - 40 - CARD_GAP * 2) / 3;
+
 const styles = StyleSheet.create({
-  deleteButton: {
-    padding: 6,
-    minWidth: 30, // Ensures the touch area is consistent
-    alignItems: "center",
-  },
-  deleteButtonText: {
-    color: "#FF3B30", // Standard iOS Delete Red
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  container: {
+  sheetContainer: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F2F2F2",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     padding: 20,
+    paddingTop: 30,
+    minHeight: height,
   },
-  appTitle: {
+  pageTitle: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#111",
-    marginBottom: 24,
-    marginTop: 20,
+    color: "#000",
+    marginBottom: 20,
   },
-  cardPrimary: {
-    backgroundColor: "#2196F3",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-  },
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between", // Pushes delete to one side and quantity to the other
-    marginTop: 10,
-    width: "100%",
-  },
-  iconButton: {
-    padding: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  deleteItemButton: {
-    backgroundColor: "#FFF5F5", // Very light red
-  },
-  stepperContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5", // Neutral light grey background
-    borderRadius: 12,
-    padding: 4,
-    width: "100%",
-  },
-  stepperButton: {
-    padding: 8,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    // Add a tiny shadow to make buttons "pop" from the grey track
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-  },
-  quantityText: {
-    paddingHorizontal: 15,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-  },
-  cardSecondary: {
-    backgroundColor: "#FF9800", // Orange for Recipes
-    marginTop: 32,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "white",
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
-  },
-  // Inventory Grid Styles
   itemsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: CARD_GAP,
+    marginBottom: 30,
   },
-  itemCard: {
-    width: "48%",
+  itemWrapper: {
+    width: CARD_WIDTH,
+    marginBottom: 8,
+  },
+  imageBox: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH,
     backgroundColor: "white",
     borderRadius: 16,
-    overflow: "hidden",
-    elevation: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
+    elevation: 2,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  deleteBadge: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    backgroundColor: "#FF5252",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
   itemImage: {
     width: "100%",
-    height: 100,
+    height: "100%",
+    resizeMode: "cover",
+  },
+  editOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingVertical: 6,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#333",
   },
   itemInfo: {
-    padding: 10,
+    alignItems: 'flex-start',
+    paddingHorizontal: 2,
   },
   itemName: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  recipeHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center", // Keeps the X vertically centered with the text
-    justifyContent: "space-between",
-  },
-  itemQuantity: {
-    fontSize: 12,
-    color: "#666",
-  },
-  // Recipe List Styles
-  recipeList: {
-    flexDirection: "column",
-    gap: 16,
-  },
-  recipeCard: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    overflow: "hidden",
-    flexDirection: "row", // Horizontal layout for recipes
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  recipeImage: {
-    width: 100,
-    height: "100%",
-    minHeight: 100,
-  },
-  recipeInfo: {
-    flex: 1,
-    padding: 12,
-    justifyContent: "center",
-  },
-  recipeName: {
-    fontSize: 18,
     fontWeight: "700",
-    color: "#333",
-    marginBottom: 4,
-    flex: 1,
-    marginRight: 16,
-    maxWidth: "70%",
-  },
-  recipeIngredientsLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#FF9800",
-    textTransform: "uppercase",
+    color: "#1A1A1A",
     marginBottom: 2,
   },
-  recipeIngredients: {
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 18,
+  qtyContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  itemQty: {
+    fontSize: 12,
+    color: "#999",
+    fontWeight: '500',
   },
   emptyText: {
     color: "#888",
-    fontStyle: "italic",
+    width: "100%",
     textAlign: "center",
     marginTop: 10,
+    marginBottom: 20,
+    fontStyle: "italic",
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#000",
+    marginBottom: 16,
+    marginTop: 10,
+  },
+  recipeList: {
+    flexDirection: "column",
+    gap: 20,
+  },
+  recipeCard: {
+    backgroundColor: "transparent",
+    marginBottom: 10,
+  },
+  recipeImageWrapper: {
     width: "100%",
+    height: 180,
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "white",
+    marginBottom: 12,
+  },
+  recipeImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  recipeContent: {
+    paddingHorizontal: 4,
+  },
+  recipeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  recipeName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1A1A1A",
+  },
+  recipeIngredients: {
+    fontSize: 14,
+    color: "#666",
+  },
+  viewMoreButton: {
+    backgroundColor: "#1A1A1A",
+    paddingVertical: 18,
+    borderRadius: 30,
+    alignItems: "center",
+    marginTop: 30,
+    marginBottom: 40,
+  },
+  viewMoreText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 24,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    marginBottom: 20,
+    backgroundColor: "#FAFAFA",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 10,
+  },
+  button: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  buttonCancel: {
+    backgroundColor: "#F5F5F5",
+  },
+  buttonSave: {
+    backgroundColor: "#1A1A1A",
+  },
+  buttonTextCancel: {
+    color: "#666",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  buttonTextSave: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 16,
   },
 });
