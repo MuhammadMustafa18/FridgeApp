@@ -2,23 +2,19 @@ import {
   deleteItem,
   deleteRecipe,
   getItems,
-  getRecipes,
-  updateItemQuantity
+  getRecipes
 } from "@/services/db";
 import { Item, Recipe } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -27,13 +23,6 @@ export default function TabTwoScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const router = useRouter();
-
-  // Edit Modal State
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editQuantity, setEditQuantity] = useState("1");
-  const [savingObj, setSavingObj] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -70,32 +59,6 @@ export default function TabTwoScreen() {
     }
   };
 
-  const openEditModal = (item: Item) => {
-    setEditingItem(item);
-    setEditName(item.name);
-    setEditQuantity(item.quantity.toString());
-    setEditModalVisible(true);
-  };
-
-  const handleSaveChanges = async () => {
-    if (!editingItem) return;
-    if (!editName.trim()) {
-      Alert.alert("Error", "Name cannot be empty");
-      return;
-    }
-    setSavingObj(true);
-    try {
-      const qty = parseInt(editQuantity) || 0;
-      await updateItemQuantity(editingItem.id, qty);
-      await loadItems();
-      setEditModalVisible(false);
-    } catch (e) {
-      Alert.alert("Error", "Failed to update item");
-    } finally {
-      setSavingObj(false);
-    }
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       <ScrollView
@@ -128,7 +91,18 @@ export default function TabTwoScreen() {
 
                   <TouchableOpacity
                     style={styles.editOverlay}
-                    onPress={() => openEditModal(item)}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/item/[id]",
+                        params: {
+                          id: item.id,
+                          name: item.name,
+                          image_url: item.image_url || "",
+                          quantity: item.quantity,
+                          status: item.status,
+                        },
+                      })
+                    }
                   >
                     <Ionicons name="pencil" size={12} color="#333" />
                     <Text style={styles.editText}>Edit</Text>
@@ -203,51 +177,6 @@ export default function TabTwoScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={editModalVisible}
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Item</Text>
-
-            <Text style={styles.label}>Item Name</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: '#eee' }]}
-              value={editName}
-              editable={false}
-            />
-
-            <Text style={styles.label}>Quantity</Text>
-            <TextInput
-              style={styles.input}
-              value={editQuantity}
-              onChangeText={setEditQuantity}
-              keyboardType="numeric"
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.buttonCancel]}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text style={styles.buttonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, styles.buttonSave]}
-                onPress={handleSaveChanges}
-                disabled={savingObj}
-              >
-                {savingObj ? <ActivityIndicator color="white" /> : <Text style={styles.buttonTextSave}>Save</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -377,7 +306,7 @@ const styles = StyleSheet.create({
   },
   recipeImageWrapper: {
     width: "100%",
-    height: 180,
+    height: 150,
     borderRadius: 20,
     overflow: "hidden",
     backgroundColor: "white",

@@ -1,9 +1,10 @@
 import { useImagePreview } from "@/context/ImagePreviewContext";
 import {
-  addItem,
   confirmAllItems,
   deleteItem,
+  deleteRecipeByName,
   getItems,
+  getRecipes,
   saveRecipe
 } from "@/services/db";
 import { Item, RecipeTemp } from "@/types";
@@ -14,15 +15,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -32,23 +30,23 @@ export default function HomeScreen() {
   const { previewImage, setPreviewImage } = useImagePreview();
   const [items, setItems] = useState<Item[]>([]);
   const [wholeInventory, setWholeInventory] = useState<Item[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemQuantity, setNewItemQuantity] = useState("1");
-  const [adding, setAdding] = useState(false);
   const [isOn, setIsOn] = useState(false);
   const [suggestedMeals, setSuggestedMeals] = useState<RecipeTemp[]>([]);
   const [recipeCount, setRecipeCount] = useState(3) // component stays mounted hence when we change tabs, use state persists
+  const [savedRecipeNames, setSavedRecipeNames] = useState<string[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       loadItems();
       loadConfirmedInventory();
+      loadSavedRecipes();
     }, [])
   );
 
   useEffect(() => {
-    const sourceItems = isOn ? wholeInventory : items;
+    // Fallback: If no newly scanned items, use the confirmed inventory
+    const sourceItems = items.length > 0 ? items : wholeInventory;
+
     if (sourceItems.length === 0) {
       setSuggestedMeals([]);
       return;
@@ -60,13 +58,12 @@ export default function HomeScreen() {
       );
       const recipes = await suggestRecipesFromGroq(ingredientNames, recipeCount);
       console.log("recipes", recipes);
-      // setSuggestedMeals(recipes); // Wait for images
       const recipesWithImages = await attachImages(recipes);
       setSuggestedMeals(recipesWithImages);
     };
 
     run();
-  }, [items, isOn, recipeCount]);
+  }, [items, wholeInventory, recipeCount]);
 
   const loadItems = async () => {
     const data = await getItems("draft");
@@ -76,6 +73,12 @@ export default function HomeScreen() {
     const data = await getItems("confirmed");
     setWholeInventory(data);
   };
+
+  const loadSavedRecipes = async () => {
+    const recipes = await getRecipes();
+    setSavedRecipeNames(recipes.map((r) => r.name));
+  };
+
 
   const handleConfirmAll = async () => {
     try {
@@ -96,28 +99,7 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAddItem = async () => {
-    if (!newItemName.trim()) {
-      Alert.alert("Required", "Please enter an item name");
-      return;
-    }
 
-    try {
-      setAdding(true);
-      const image_url = await searchItemImage(newItemName);
-      const qty = parseInt(newItemQuantity) || 1;
-      await addItem(newItemName, qty, image_url);
-      setNewItemName("");
-      setNewItemQuantity("1");
-      setModalVisible(false);
-      await loadItems();
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Could not add item");
-    } finally {
-      setAdding(false);
-    }
-  };
 
   // useEffect(() => {
   //   if (items.length > 0) {
@@ -261,7 +243,7 @@ export default function HomeScreen() {
             {/* Manual Input Card */}
             <View style={styles.itemWrapper}>
               <TouchableOpacity
-                onPress={() => setModalVisible(true)}
+                onPress={() => router.push({ pathname: "/item/[id]", params: { id: "new" } })}
                 style={[styles.imageBox, styles.manualCard]}
               >
                 <Ionicons name="pencil-outline" size={32} color="#333" />
@@ -282,16 +264,33 @@ export default function HomeScreen() {
 
           {/* Recipes Section */}
           <View style={{ marginTop: 30 }}>
-            <View style={styles.headerRow}>
-              <Text style={styles.sectionHeader}>
-                Recipes Of <Text style={{ fontWeight: "900" }}>Recently</Text>
-              </Text>
-            </View>
-            <View style={styles.headerRow}>
-              <Text style={styles.sectionHeader}>
-                <Text style={{ fontWeight: "900" }}>Scanned</Text> Items
-              </Text>
-            </View>
+            {items.length === 0 && wholeInventory.length > 0 ? (
+              <>
+                <View style={styles.headerRow}>
+                  <Text style={styles.sectionHeader}>
+                    Recipes From <Text style={{ fontWeight: "900" }}>Your</Text>
+                  </Text>
+                </View>
+                <View style={styles.headerRow}>
+                  <Text style={styles.sectionHeader}>
+                    <Text style={{ fontWeight: "900" }}>Inventory</Text>
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.headerRow}>
+                  <Text style={styles.sectionHeader}>
+                    Recipes Of <Text style={{ fontWeight: "900" }}>Recently</Text>
+                  </Text>
+                </View>
+                <View style={styles.headerRow}>
+                  <Text style={styles.sectionHeader}>
+                    <Text style={{ fontWeight: "900" }}>Scanned</Text> Items
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Recipes List */}
@@ -318,11 +317,32 @@ export default function HomeScreen() {
                     }}
                   >
                     <Text style={styles.recipeTitle}>{item.name}</Text>
-                    <TouchableOpacity onPress={() => saveRecipe(item)}>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        const isSaved = savedRecipeNames.includes(item.name);
+                        if (isSaved) {
+                          await deleteRecipeByName(item.name);
+                          setSavedRecipeNames((prev) =>
+                            prev.filter((name) => name !== item.name)
+                          );
+                        } else {
+                          saveRecipe(item);
+                          setSavedRecipeNames((prev) => [...prev, item.name]);
+                        }
+                      }}
+                    >
                       <Ionicons
-                        name="bookmark-outline"
+                        name={
+                          savedRecipeNames.includes(item.name)
+                            ? "bookmark"
+                            : "bookmark-outline"
+                        }
                         size={24}
-                        color="#1A1A1A"
+                        color={
+                          savedRecipeNames.includes(item.name)
+                            ? "#1A1A1A"
+                            : "#1A1A1A"
+                        }
                       />
                     </TouchableOpacity>
                   </View>
@@ -347,58 +367,6 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Manual Add Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Item</Text>
-
-            <Text style={styles.label}>Item Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Milk"
-              value={newItemName}
-              onChangeText={setNewItemName}
-              autoFocus
-            />
-
-            <Text style={styles.label}>Quantity</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="1"
-              value={newItemQuantity}
-              onChangeText={setNewItemQuantity}
-              keyboardType="numeric"
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.buttonCancel]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.buttonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, styles.buttonAdd]}
-                onPress={handleAddItem}
-                disabled={adding}
-              >
-                {adding ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.buttonTextAdd}>Add Item</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

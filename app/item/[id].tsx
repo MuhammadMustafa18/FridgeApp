@@ -1,28 +1,50 @@
-import { updateItemName, updateItemQuantity } from "@/services/db";
+import { addItem, updateItemName, updateItemQuantity } from "@/services/db";
+import { searchItemImage } from "@/services/imageSearch";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 export default function ItemEdit() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const numericId = Number(params.id);
 
-  const [name, setName] = useState(params.name as string);
-  const [quantity, setQuantity] = useState(params.quantity as string);
+  const [name, setName] = useState((params.name as string) || "");
+  const [quantity, setQuantity] = useState((params.quantity as string) || "");
+  const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    const QuantityValue = parseInt(quantity, 10) || 0;
-    await updateItemQuantity(numericId, QuantityValue);
-    await updateItemName(numericId, name);
-    router.back();
+    if (!name.trim()) {
+      Alert.alert("Required", "Please enter an item name");
+      return;
+    }
+    const QuantityValue = parseInt(quantity, 10) || 1;
+
+    setLoading(true);
+    try {
+      if (numericId) {
+        await updateItemQuantity(numericId, QuantityValue);
+        await updateItemName(numericId, name);
+      } else {
+        const image_url = await searchItemImage(name);
+        await addItem(name, QuantityValue, image_url);
+      }
+      router.back();
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "Failed to save item");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -34,8 +56,12 @@ export default function ItemEdit() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>Save</Text>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator size="small" color="#121212" />
+            ) : (
+              <Text style={styles.saveBtnText}>Save</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -43,7 +69,8 @@ export default function ItemEdit() {
         <View style={styles.contentCard}>
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <Text style={styles.mainTitle}>
-              Input <Text style={{ fontWeight: "900" }}>Item</Text>
+              {numericId ? "Edit" : "Input"}{" "}
+              <Text style={{ fontWeight: "900" }}>Item</Text>
             </Text>
 
             <View style={styles.inputGroup}>
@@ -82,8 +109,8 @@ export default function ItemEdit() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#121212", // Matches the dark top area
-    marginTop:50
+    backgroundColor: "#000000ff", // Matches the dark top area
+    marginTop: 50
   },
   container: {
     flex: 1,
