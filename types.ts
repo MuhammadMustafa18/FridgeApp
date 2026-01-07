@@ -11,6 +11,9 @@ export type Recipe = {
   image_url?: string;
   ingredients: string[];
   how_to_cook?: string;
+  time?: string;
+  difficulty?: string;
+  servings?: string;
 };
 
 export type RecipeTemp = {
@@ -18,4 +21,7 @@ export type RecipeTemp = {
   image_url?: string;
   ingredients: string[];
   how_to_cook?: string;
+  time?: string;
+  difficulty?: string;
+  servings?: string;
 };

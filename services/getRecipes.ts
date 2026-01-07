@@ -24,7 +24,7 @@ You are a helpful cooking assistant.
 Given these available ingredients:
 ${ingredients.join(", ")}
 
-Suggest ${count?count:3} simple recipes.
+Suggest ${count ? count : 3} simple recipes.
 
 Rules:
 - Return ONLY valid JSON
@@ -62,5 +62,51 @@ Rules:
   } catch (err) {
     console.error("Groq recipe error:", err);
     return [];
+  }
+}
+
+export async function generateRecipeMetadata(
+  name: string,
+  ingredients: string[]
+): Promise<{ time: string; difficulty: string; servings: string } | null> {
+  if (!GROQ_API_KEY) return null;
+
+  const prompt = `
+You are a cooking expert.
+Recipe: ${name}
+Ingredients: ${ingredients.join(", ")}
+
+Estimate the preparation time, difficulty, and servings.
+Return ONLY valid JSON. No backticks.
+Format:
+{
+  "time": "e.g. 30 mins",
+  "difficulty": "Easy/Medium/Hard",
+  "servings": "e.g. 2 people"
+}
+`;
+
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.5,
+      }),
+    });
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
+
+    return JSON.parse(content);
+  } catch (err) {
+    console.error("Groq metadata error:", err);
+    return null;
   }
 }
