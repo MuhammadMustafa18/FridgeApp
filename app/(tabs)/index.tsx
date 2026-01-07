@@ -153,8 +153,10 @@ export default function HomeScreen() {
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Transparent Spacer to show black bg */}
-        <View style={{ height: 140 }} />
+        {/* Header Title in Black Section */}
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerTitle}>Snap2Cook</Text>
+        </View>
 
         <View style={styles.sheetContainer}>
           {/* Header */}
@@ -379,6 +381,18 @@ const styles = StyleSheet.create({
   // Legacy container valid for reference, but using sheetContainer now
   container: {
     padding: 20,
+  },
+  headerContainer: {
+    height: 140,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 50,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "white",
+    fontFamily: "Poppins_700Bold",
   },
   sheetContainer: {
     flex: 1,
